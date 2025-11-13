@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT
 
 // This is considered an Exogenous, Decentralized, Anchored (pegged), Crypto Collateralized low volitility coin
 
@@ -23,39 +23,55 @@
 // private
 // view & pure functions
 
-/**
- * Title: DecentralizedStableCoin
- * Author: Alberto Castro
- * Collateral: Exogenous (ETH & BTC)
- * Minting: Algorithmic
- * Relative Stability: Peggeg to USD
- *
- * This is a contract meant to be governed by DSCEngine. This contract is just the ERC20
- * implementation of our stablecoin sytem.
- */
-
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.19;
 
 import {ERC20Burnable, ERC20} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {console} from "forge-std/Test.sol";
 
+/*
+ * title DecentralizedStableCoin
+ * author Alberto Castro
+ * Collateral: Exogenous
+ * Minting (Stability Mechanism): Decentralized (Algorithmic)
+ * Value (Relative Stability): Anchored (Pegged to USD)
+ * Collateral Type: Crypto
+ *
+ * This is the contract meant to be owned by DSCEngine. It is an ERC20 token that can be minted and burned by the DSCEngine smart contract.
+ */
 contract DecentralizedStableCoin is ERC20Burnable, Ownable {
-    error DecentralizedStableCoin_MustBeMoreThanZero();
-    error DecentralizedStableCoin_BurnAmounExceedsBalance();
-    error DecentralizedStableCoin_NotZeroAddress();
+    error DecentralizedStableCoin__AmountMustBeMoreThanZero();
+    error DecentralizedStableCoin__BurnAmountExceedsBalance();
+    error DecentralizedStableCoin__NotZeroAddress();
 
-    constructor() ERC20("DecentrilizedStableCoin", "DSC") {}
+    event TransferBurnTokens(
+        address indexed from,
+        address indexed to,
+        uint256 value
+    );
+    event TransferMintTokens(
+        address indexed from,
+        address indexed to,
+        uint256 amount
+    );
+
+    address immutable i_owner;
+
+    constructor() ERC20("DecentralizedStableCoin", "DSC") Ownable(msg.sender) {
+        i_owner = msg.sender;
+    }
 
     function burn(uint256 _amount) public override onlyOwner {
         uint256 balance = balanceOf(msg.sender);
         if (_amount <= 0) {
-            revert DecentralizedStableCoin_MustBeMoreThanZero();
+            revert DecentralizedStableCoin__AmountMustBeMoreThanZero();
         }
         if (balance < _amount) {
-            revert DecentralizedStableCoin_BurnAmounExceedsBalance();
+            revert DecentralizedStableCoin__BurnAmountExceedsBalance();
         }
-
         super.burn(_amount);
+
+        emit TransferBurnTokens(msg.sender, address(0), _amount);
     }
 
     function mint(
@@ -63,15 +79,19 @@ contract DecentralizedStableCoin is ERC20Burnable, Ownable {
         uint256 _amount
     ) external onlyOwner returns (bool) {
         if (_to == address(0)) {
-            revert DecentralizedStableCoin_NotZeroAddress();
+            revert DecentralizedStableCoin__NotZeroAddress();
         }
-
         if (_amount <= 0) {
-            revert DecentralizedStableCoin_MustBeMoreThanZero();
+            revert DecentralizedStableCoin__AmountMustBeMoreThanZero();
         }
-
         _mint(_to, _amount);
 
+        emit TransferMintTokens(address(0), _to, _amount);
+
         return true;
+    }
+
+    function getOwner() public view returns (address) {
+        return i_owner;
     }
 }

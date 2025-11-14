@@ -60,6 +60,7 @@ contract DSCEngige is ReentrancyGuard {
     error DSCEngige_NotAllowedToken();
     error DSCEngige_TransferFailed();
     error DSCEngige_BreaksHealthFactor(uint256 healthFactor);
+    error DSCEngige_MintFailed();
 
     ///////////////////
     // State Variables
@@ -161,6 +162,10 @@ contract DSCEngige is ReentrancyGuard {
         s_dscMinted[msg.sender] += amoutDscToMint;
         //if the health factor is too low, revert
         _revertIfHealthFactorIsBroken(msg.sender);
+        bool minted = i_dsc.mint(msg.sender, amoutDscToMint);
+        if (!minted) {
+            revert DSCEngige_MintFailed();
+        }
     }
 
     function redeemCollateralForDsc() external {}

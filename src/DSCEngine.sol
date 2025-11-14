@@ -59,6 +59,7 @@ contract DSCEngige is ReentrancyGuard {
     error DSCEngige_TokenAddressesAndPriceFeedAddressMustBeSameLenght();
     error DSCEngige_NotAllowedToken();
     error DSCEngige_TransferFailed();
+    error DSCEngige_BreaksHealthFactor(uint256 healthFactor);
 
     ///////////////////
     // State Variables
@@ -66,6 +67,9 @@ contract DSCEngige is ReentrancyGuard {
 
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
     uint256 private constant PRECISION = 1e18;
+    uint256 private constant LIQUIDATION_THRESHOLD = 50; //200% overcollateralized
+    uint256 private constant LIQUIDATION_PRECISION = 100;
+    uint256 private constant MIN_HEALTH_FACTOR = 1;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
@@ -188,13 +192,18 @@ contract DSCEngige is ReentrancyGuard {
         //total dsc minted
         //total collateral value
         (uint256 totalDscMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
+        uint256 collateralAdjustedForThreshold = (collateralValueInUSD * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+        return (collateralAdjustedForThreshold * PRECISION) / totalDscMinted;
     }
 
+    //get the health factor
+    //if the health factor is less than the minimum, revert
     function _revertIfHealthFactorIsBroken(address user) internal view {
-        //get the health factor
-        //if the health factor is less than the minimum, revert
-
+        uint256 healthFactor = _healthFactor(user);
+        if (healthFactor < MIN_HEALTH_FACTOR) {
+            revert DSCEngige_BreaksHealthFactor(healthFactor);
         }
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // External & Public View & Pure Functions
@@ -219,6 +228,6 @@ contract DSCEngige is ReentrancyGuard {
         (, int256 price,,,) = AggregatorV3Interface(s_priceFeeds[token]).latestRoundData();
         //1 eth = $1,000
         // the returned value from cl is 1000 * e8
-        return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / 1e18; //1000 * e8 *(e10) * 1000 *1e18
+        return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION; //1000 * e8 *(e10) * 1000 *1e18
     }
 }

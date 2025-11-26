@@ -25,6 +25,7 @@ contract Invariants is StdInvariant {
     HelperConfig private helpConfig;
     address private weth;
     address private wbtc;
+    Handler private handler;
 
     function setUp() public {
         deployer = new DeployDSCEngine();
@@ -32,7 +33,7 @@ contract Invariants is StdInvariant {
         (,, weth, wbtc,) = helpConfig.activeNetworkConfig();
         //targetContract(address(dsce));
 
-        Handler handler = new Handler(dsce, dsc);
+        handler = new Handler(dsce, dsc);
         targetContract(address(handler));
         //dont call reddemCollateral unless there is some collateral deposited
     }
@@ -47,7 +48,22 @@ contract Invariants is StdInvariant {
         uint256 totalWethValue = dsce.getUSDvalue(weth, totalWethDeposited);
         uint256 totalWbtcValue = dsce.getUSDvalue(wbtc, totalWbtcDeposited);
 
+        console.log("weth: ", totalWethValue);
+        console.log("wbtc: ", totalWbtcValue);
+        console.log("total supply: ", totalSupply);
+        console.log("Times mint is called: ", handler.timesMinstIsCalled());
+
         assert(totalWethValue + totalWbtcValue >= totalSupply);
+    }
+
+    function invariant_gettersShouldNotRevert() public view {
+        dsce.getAdditionalFeedPrecision();
+        dsce.getCollateralTokens();
+        //dsce.getLiquidationBonus();
+        //dsce.getLiquidationThreshold();
+        //dsce.getMinHealthFactor();
+        dsce.getPrecision();
+        //dsce.getDsc();
     }
 }
 

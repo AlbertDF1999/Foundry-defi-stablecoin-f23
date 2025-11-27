@@ -27,6 +27,8 @@ contract DSCEngineTest is Test {
     uint256 public constant AMOUNT_COLLATERAL = 100 ether;
     uint256 public constant STARTING_ERC20_BALANCE = 100 ether;
     uint256 public constant AMOUNT_TO_MINT = 10 ether;
+    uint256 public constant AMOUNT_TO_MINT_FOR_HF_BELOW_1 = 910 ether;
+    uint256 public constant MIN_HEALTH_FACTOR = 1e18;
     uint256 public amountToMint;
 
     function setUp() external {
@@ -36,6 +38,25 @@ contract DSCEngineTest is Test {
 
         ERC20Mock(weth).mint(USER, AMOUNT_COLLATERAL);
         ERC20Mock(wbtc).mint(USER, AMOUNT_COLLATERAL);
+    }
+
+    /////////////////////
+    // Modifiers //
+    //////////////////////
+    modifier depositCollateralAndMintDsc() {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL);
+        dsce.depositCollateralAndMintDsc(weth, AMOUNT_COLLATERAL, AMOUNT_TO_MINT);
+        vm.stopPrank();
+        _;
+    }
+
+    modifier depositCollateral() {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL);
+        dsce.depositCollateral(weth, AMOUNT_COLLATERAL);
+        vm.stopPrank();
+        _;
     }
 
     /////////////////////
@@ -80,14 +101,6 @@ contract DSCEngineTest is Test {
     //////////////////////////////
     // Deposit collateral Tests //
     //////////////////////////////
-
-    modifier depositCollateral() {
-        vm.startPrank(USER);
-        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL);
-        dsce.depositCollateral(weth, AMOUNT_COLLATERAL);
-        vm.stopPrank();
-        _;
-    }
 
     function testRevertIfCollateralZero() external {
         //arrange
@@ -143,14 +156,6 @@ contract DSCEngineTest is Test {
     ///////////////////////////////////////
     // depositCollateralAndMintDsc Tests //
     ///////////////////////////////////////
-
-    modifier depositCollateralAndMintDsc() {
-        vm.startPrank(USER);
-        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL);
-        dsce.depositCollateralAndMintDsc(weth, AMOUNT_COLLATERAL, AMOUNT_TO_MINT);
-        vm.stopPrank();
-        _;
-    }
 
     function testMintedMoreThanAllowedByHealthFactor() external {
         vm.startPrank(USER);
@@ -323,4 +328,57 @@ contract DSCEngineTest is Test {
     ///////////////////////////////////
     // redeemCollateralForDsc Tests //
     //////////////////////////////////
+
+    function testMustRedeemMoreThanZero() public depositCollateralAndMintDsc {
+        vm.startPrank(USER);
+        dsc.approve(address(dsce), AMOUNT_COLLATERAL);
+        vm.expectRevert(DSCEngine.DSCEngine_NeedsMoreThanZero.selector);
+        dsce.redeemCollateralForDsc(weth, 0, AMOUNT_TO_MINT);
+        vm.stopPrank();
+    }
+
+    function testCanRedeemDepositedCollateral() public {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL);
+        dsce.depositCollateralAndMintDsc(weth, AMOUNT_COLLATERAL, AMOUNT_TO_MINT);
+        dsc.approve(address(dsce), AMOUNT_TO_MINT);
+        dsce.redeemCollateralForDsc(weth, AMOUNT_TO_MINT, AMOUNT_TO_MINT);
+        vm.stopPrank();
+
+        uint256 userBalance = dsc.balanceOf(USER);
+        assertEq(userBalance, 0);
+    }
+
+    ////////////////////////
+    // healthFactor Tests //
+    ////////////////////////
+
+    function testProperlyReportsHealthFactor() public depositCollateralAndMintDsc {
+        uint256 expectedHealthFactor = 10000 ether;
+        uint256 healthFactor = dsce.getHealthFactor(USER);
+        // console.log(healthFactor);
+        // console.log(expectedHealthFactor);
+        assertEq(healthFactor, expectedHealthFactor);
+    }
+
+    function testHealthFactorCanGoBelowOne() public depositCollateral {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dsce), AMOUNT_TO_MINT_FOR_HF_BELOW_1);
+        dsce.mintDsc(AMOUNT_TO_MINT_FOR_HF_BELOW_1);
+        vm.stopPrank();
+        int256 ethUsdUpdatedPrice = 18e8; // 1 ETH = $18
+        // Remember, we need $200 at all times if we have $100 of debt
+
+        MockV3Aggregator(ethUsdPriceFeed).updateAnswer(ethUsdUpdatedPrice);
+
+        uint256 userHealthFactor = dsce.getHealthFactor(USER);
+        // 180*50 (LIQUIDATION_THRESHOLD) / 100 (LIQUIDATION_PRECISION) / 100 (PRECISION) = 90 / 100 (totalDscMinted) =
+        // 0.9
+        console.log(userHealthFactor);
+        assert(userHealthFactor < 1 ether);
+    }
+
+    ///////////////////////
+    // Liquidation Tests //
+    ///////////////////////
 }

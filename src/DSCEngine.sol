@@ -216,8 +216,8 @@ contract DSCEngine is ReentrancyGuard {
         external
     {
         burnDsc(amountToBurn);
-        redeemCollateral(tokenCollateralAddress, amountCollateral);
-        //reddemCollateral checks health factor
+        _redeemCollateral(tokenCollateralAddress, amountCollateral, msg.sender, msg.sender);
+        _revertIfHealthFactorIsBroken(msg.sender);
     }
 
     //Do we need to see if the health factor is broken after burning DSC?
@@ -282,7 +282,9 @@ contract DSCEngine is ReentrancyGuard {
         _revertIfHealthFactorIsBroken(msg.sender);
     }
 
-    function getHealthFactor() external view {}
+    // function getHealthFactor(address user) external view {
+    //     _healthFactor(user);
+    // }
 
     //////////////////////////////
     // Private & Internal View & Pure Functions

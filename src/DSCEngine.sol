@@ -30,6 +30,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import {OracleLib} from "../script/libraries/OracleLib.sol";
+import {console} from "forge-std/Test.sol";
 
 /*
  * @title DSCEngine
@@ -81,6 +82,7 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant LIQUIDATION_PRECISION = 100;
     uint256 private constant MIN_HEALTH_FACTOR = 1e18; //1.0
     uint256 private constant LIQUIDATOR_BONUS = 10; //this means 10% bonus
+    uint256 private constant LIQUIDATION_BONUS = 10; // This means you get assets at a 10% discount when liquidating
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
@@ -306,8 +308,6 @@ contract DSCEngine is ReentrancyGuard {
 
     function _redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral, address from, address to)
         private
-        moreThanZero(amountCollateral)
-        nonReentrant
     {
         s_collateralDeposited[from][tokenCollateralAddress] -= amountCollateral;
         emit CollateralRedeemed(from, to, tokenCollateralAddress, amountCollateral);
@@ -316,7 +316,6 @@ contract DSCEngine is ReentrancyGuard {
         if (!success) {
             revert DSCEngine_TransferFailed();
         }
-        _revertIfHealthFactorIsBroken(msg.sender);
     }
 
     function _getAccountInformation(address user)
@@ -389,8 +388,12 @@ contract DSCEngine is ReentrancyGuard {
         //$100 1e18 / $2000 per eth = .05 eth
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[collateralAddress]);
         (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
+        //console.log(price);
         //$100e18 * 1e18 / ($2000 * 1e18) = .05e18
         uint256 amountToCoverInEther = (usdAmountInWei * PRECISION) / (uint256(price) * ADDITIONAL_FEED_PRECISION);
+        // console.log(usdAmountInWei);
+        // console.log(price);
+        // console.log(amountToCoverInEther);
         return amountToCoverInEther;
     }
 
@@ -455,5 +458,13 @@ contract DSCEngine is ReentrancyGuard {
 
     function getCollateralTokenPriceFeed(address tokenAddress) public view returns (address) {
         return s_priceFeeds[tokenAddress];
+    }
+
+    function getLiquidationBonus() external pure returns (uint256) {
+        return LIQUIDATION_BONUS;
+    }
+
+    function getLiquidationPrecision() external pure returns (uint256) {
+        return LIQUIDATION_PRECISION;
     }
 }

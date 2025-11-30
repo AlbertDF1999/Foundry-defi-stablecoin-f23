@@ -216,6 +216,7 @@ contract DSCEngine is ReentrancyGuard {
      */
     function redeemCollateralForDsc(address tokenCollateralAddress, uint256 amountCollateral, uint256 amountToBurn)
         external
+        moreThanZero(amountCollateral)
     {
         burnDsc(amountToBurn);
         _redeemCollateral(tokenCollateralAddress, amountCollateral, msg.sender, msg.sender);
@@ -466,5 +467,17 @@ contract DSCEngine is ReentrancyGuard {
 
     function getLiquidationPrecision() external pure returns (uint256) {
         return LIQUIDATION_PRECISION;
+    }
+
+    function getMinHealthFactor() external pure returns (uint256) {
+        return MIN_HEALTH_FACTOR;
+    }
+
+    function getLiquidationThreshold() external pure returns (uint256) {
+        return LIQUIDATION_THRESHOLD;
+    }
+
+    function getDsc() external view returns (address) {
+        return address(i_dsc);
     }
 }

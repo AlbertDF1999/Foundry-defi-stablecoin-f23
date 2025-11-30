@@ -26,10 +26,12 @@ contract DSCEngineTest is Test {
 
     address public USER = makeAddr("USER");
     uint256 public constant AMOUNT_COLLATERAL = 100 ether;
+    uint256 public constant AMOUNT_COLLATERAL_VIEW_FUNCTIONS = 10 ether;
     uint256 public constant STARTING_ERC20_BALANCE = 100 ether;
     uint256 public constant AMOUNT_TO_MINT = 10 ether;
     uint256 public constant AMOUNT_TO_MINT_FOR_HF_BELOW_1 = 910 ether;
     uint256 public constant MIN_HEALTH_FACTOR = 1e18;
+    uint256 public constant LIQUIDATION_THRESHOLD = 50;
     uint256 public amountToMint;
 
     //Liquidation
@@ -549,4 +551,86 @@ contract DSCEngineTest is Test {
     ///////////////////////////////////
     // View & Pure Function Tests //
     //////////////////////////////////
+
+    function testGetCollateralTokenPriceFeed() public {
+        address priceFeed = dsce.getCollateralTokenPriceFeed(weth);
+        assertEq(priceFeed, ethUsdPriceFeed);
+    }
+
+    function testGetCollateralTokens() public {
+        address[] memory collateralTokens = dsce.getCollateralTokens();
+        assertEq(collateralTokens[0], weth);
+    }
+
+    function testGetMinHealthFactor() public {
+        uint256 minHealthFactor = dsce.getMinHealthFactor();
+        assertEq(minHealthFactor, MIN_HEALTH_FACTOR);
+    }
+
+    function testGetLiquidationThreshold() public {
+        uint256 liquidationThreshold = dsce.getLiquidationThreshold();
+        assertEq(liquidationThreshold, LIQUIDATION_THRESHOLD);
+    }
+
+    function testGetAccountCollateralValueFromInformation() public depositCollateral {
+        address USER_WITH_10_ETH_COLLATERAL = makeAddr("USER_WITH_10_ETH_COLLATERAL");
+        vm.startPrank(USER_WITH_10_ETH_COLLATERAL);
+        ERC20Mock(weth).mint(USER_WITH_10_ETH_COLLATERAL, AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+        dsce.depositCollateral(weth, AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+        vm.stopPrank();
+
+        (, uint256 collateralValue) = dsce.getAccountInformation(USER_WITH_10_ETH_COLLATERAL);
+        uint256 expectedCollateralValue = dsce.getUSDvalue(weth, AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+        console.log(expectedCollateralValue);
+        assertEq(collateralValue, expectedCollateralValue);
+    }
+
+    function testGetCollateralBalanceOfUser() public {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+        dsce.depositCollateral(weth, AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+        vm.stopPrank();
+        uint256 collateralBalance = dsce.getCollateralBalanceOfTheUser(USER, weth);
+        assertEq(collateralBalance, AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+    }
+
+    function testGetAccountCollateralValue() public {
+        vm.startPrank(USER);
+        ERC20Mock(weth).approve(address(dsce), AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+        dsce.depositCollateral(weth, AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+        vm.stopPrank();
+        uint256 collateralValue = dsce.getAccountCollateralValue(USER);
+        uint256 expectedCollateralValue = dsce.getUSDvalue(weth, AMOUNT_COLLATERAL_VIEW_FUNCTIONS);
+        assertEq(collateralValue, expectedCollateralValue);
+    }
+
+    function testGetDscAddress() public {
+        address dscAddress = dsce.getDsc();
+        assertEq(dscAddress, address(dsc));
+    }
+
+    function testLiquidationPrecision() public {
+        uint256 expectedLiquidationPrecision = 100;
+        uint256 actualLiquidationPrecision = dsce.getLiquidationPrecision();
+        assertEq(actualLiquidationPrecision, expectedLiquidationPrecision);
+    }
+
+    // How do we adjust our invariant tests for this?
+    // function testInvariantBreaks() public depositedCollateralAndMintedDsc {
+    //     MockV3Aggregator(ethUsdPriceFeed).updateAnswer(0);
+
+    //     uint256 totalSupply = dsc.totalSupply();
+    //     uint256 wethDeposted = ERC20Mock(weth).balanceOf(address(dsce));
+    //     uint256 wbtcDeposited = ERC20Mock(wbtc).balanceOf(address(dsce));
+
+    //     uint256 wethValue = dsce.getUsdValue(weth, wethDeposted);
+    //     uint256 wbtcValue = dsce.getUsdValue(wbtc, wbtcDeposited);
+
+    //     console.log("wethValue: %s", wethValue);
+    //     console.log("wbtcValue: %s", wbtcValue);
+    //     console.log("totalSupply: %s", totalSupply);
+
+    //     assert(wethValue + wbtcValue >= totalSupply);
+    // }
 }
